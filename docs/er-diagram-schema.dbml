@@ -1,0 +1,160 @@
+// CampusConnect — ER Diagram Schema
+// Paste this into https://dbdiagram.io to generate the visual ER diagram
+// Then export as PNG → docs/er-diagram.png
+
+// ─────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────
+Table users {
+  id            uuid        [pk, default: `gen_random_uuid()`]
+  firebase_uid  varchar(128) [unique, not null]
+  email         varchar(255) [unique, not null]
+  username      varchar(50)  [unique, not null]
+  full_name     varchar(100) [not null]
+  bio           text
+  avatar_url    text
+  college       varchar(150)
+  major         varchar(100)
+  grad_year     smallint
+  is_open_to_referral boolean [default: false]
+  created_at    timestamp   [default: `now()`]
+  updated_at    timestamp   [default: `now()`]
+}
+
+// ─────────────────────────────────────────
+// POSTS
+// ─────────────────────────────────────────
+Table posts {
+  id          uuid      [pk, default: `gen_random_uuid()`]
+  author_id   uuid      [not null, ref: > users.id]
+  content     text      [not null]
+  media_url   text
+  post_type   varchar(20) [default: 'general']  // general | opportunity | announcement
+  like_count  int       [default: 0]
+  created_at  timestamp [default: `now()`]
+  updated_at  timestamp [default: `now()`]
+}
+
+// ─────────────────────────────────────────
+// COMMENTS
+// ─────────────────────────────────────────
+Table comments {
+  id          uuid      [pk, default: `gen_random_uuid()`]
+  post_id     uuid      [not null, ref: > posts.id]
+  author_id   uuid      [not null, ref: > users.id]
+  content     text      [not null]
+  created_at  timestamp [default: `now()`]
+}
+
+// ─────────────────────────────────────────
+// POST LIKES (junction)
+// ─────────────────────────────────────────
+Table post_likes {
+  user_id   uuid [not null, ref: > users.id]
+  post_id   uuid [not null, ref: > posts.id]
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    (user_id, post_id) [pk]
+  }
+}
+
+// ─────────────────────────────────────────
+// GROUPS (Study Groups)
+// ─────────────────────────────────────────
+Table groups {
+  id          uuid      [pk, default: `gen_random_uuid()`]
+  name        varchar(100) [not null]
+  description text
+  subject     varchar(100)
+  admin_id    uuid      [not null, ref: > users.id]
+  avatar_url  text
+  is_private  boolean   [default: false]
+  created_at  timestamp [default: `now()`]
+}
+
+// ─────────────────────────────────────────
+// GROUP MEMBERSHIPS (junction)
+// ─────────────────────────────────────────
+Table group_memberships {
+  user_id    uuid      [not null, ref: > users.id]
+  group_id   uuid      [not null, ref: > groups.id]
+  role       varchar(20) [default: 'member']  // admin | moderator | member
+  joined_at  timestamp [default: `now()`]
+
+  indexes {
+    (user_id, group_id) [pk]
+  }
+}
+
+// ─────────────────────────────────────────
+// MESSAGES
+// ─────────────────────────────────────────
+Table messages {
+  id           uuid      [pk, default: `gen_random_uuid()`]
+  sender_id    uuid      [not null, ref: > users.id]
+  receiver_id  uuid      [not null, ref: > users.id]
+  content      text      [not null]
+  media_url    text
+  is_read      boolean   [default: false]
+  created_at   timestamp [default: `now()`]
+}
+
+// ─────────────────────────────────────────
+// EVENTS
+// ─────────────────────────────────────────
+Table events {
+  id            uuid      [pk, default: `gen_random_uuid()`]
+  organizer_id  uuid      [not null, ref: > users.id]
+  title         varchar(150) [not null]
+  description   text
+  location      varchar(200)
+  event_date    timestamp [not null]
+  banner_url    text
+  max_capacity  int
+  is_online     boolean   [default: false]
+  meet_link     text
+  created_at    timestamp [default: `now()`]
+}
+
+// ─────────────────────────────────────────
+// EVENT REGISTRATIONS (junction)
+// ─────────────────────────────────────────
+Table event_registrations {
+  user_id     uuid      [not null, ref: > users.id]
+  event_id    uuid      [not null, ref: > events.id]
+  registered_at timestamp [default: `now()`]
+  status      varchar(20) [default: 'confirmed']  // confirmed | waitlisted | cancelled
+
+  indexes {
+    (user_id, event_id) [pk]
+  }
+}
+
+// ─────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────
+Table notifications {
+  id          uuid      [pk, default: `gen_random_uuid()`]
+  user_id     uuid      [not null, ref: > users.id]
+  actor_id    uuid      [ref: > users.id]             // who triggered it
+  type        varchar(50) [not null]                   // like | comment | join | event | message
+  entity_id   uuid                                     // post_id | group_id | event_id etc.
+  entity_type varchar(50)                              // post | group | event
+  message     text
+  is_read     boolean   [default: false]
+  created_at  timestamp [default: `now()`]
+}
+
+// ─────────────────────────────────────────
+// FOLLOWS (optional — for future feed algo)
+// ─────────────────────────────────────────
+Table follows {
+  follower_id  uuid [not null, ref: > users.id]
+  following_id uuid [not null, ref: > users.id]
+  created_at   timestamp [default: `now()`]
+
+  indexes {
+    (follower_id, following_id) [pk]
+  }
+}
