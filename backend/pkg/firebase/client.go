@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
@@ -13,25 +14,35 @@ import (
 
 type Client struct {
 	Auth      *auth.Client
-	Messaging *messaging.Client // used by notifications.Service for FCM push delivery
+	Messaging *messaging.Client
 }
 
 // NewClient initialises the Firebase Admin SDK.
 //
-// Credential resolution order:
-//  1. FIREBASE_CREDENTIALS env var — full service account JSON (used on Render/production)
-//  2. credentialFile path argument — local serviceAccountKey.json (used in dev)
+// Credential resolution order (first match wins):
+//  1. FIREBASE_CREDENTIALS env var — full service account JSON string (Render / any PaaS)
+//  2. credentialFile arg starts with '{' — inline JSON passed as "path" by mistake, handled gracefully
+//  3. credentialFile arg is a real file path — local dev (e.g. ./serviceAccountKey.json)
 func NewClient(credentialFile string) *Client {
 	var opt option.ClientOption
 
-	if creds := os.Getenv("FIREBASE_CREDENTIALS"); creds != "" {
-		// Production: credentials injected as env var
-		opt = option.WithCredentialsJSON([]byte(creds))
+	switch {
+	case os.Getenv("FIREBASE_CREDENTIALS") != "":
+		// Production: JSON injected via env var — never log its contents
+		opt = option.WithCredentialsJSON([]byte(os.Getenv("FIREBASE_CREDENTIALS")))
 		log.Println("🔑 Firebase: using FIREBASE_CREDENTIALS env var")
-	} else {
-		// Local dev: credentials loaded from file
+
+	case strings.HasPrefix(strings.TrimSpace(credentialFile), "{"):
+		// Defensive: someone set the "file path" config to raw JSON instead of a path.
+		// Use it directly rather than crashing with "file name too long".
+		opt = option.WithCredentialsJSON([]byte(credentialFile))
+		log.Println("🔑 Firebase: using inline JSON credentials (FIREBASE_CREDENTIAL_FILE contained JSON)")
+
+	default:
+		// Local dev: real file path, safe to use
 		opt = option.WithCredentialsFile(credentialFile)
-		log.Printf("🔑 Firebase: using credential file %s", credentialFile)
+		log.Println("🔑 Firebase: using local credential file")
+		// Intentionally NOT logging the path — it could contain secrets if misconfigured
 	}
 
 	app, err := firebase.NewApp(context.Background(), nil, opt)
@@ -46,7 +57,6 @@ func NewClient(credentialFile string) *Client {
 
 	msgClient, err := app.Messaging(context.Background())
 	if err != nil {
-		// Non-fatal — FCM push is optional; in-app notifications still work
 		log.Printf("⚠️  Firebase Messaging unavailable (push notifications disabled): %v", err)
 	}
 
