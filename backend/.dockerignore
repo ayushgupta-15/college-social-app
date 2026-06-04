@@ -1,0 +1,11 @@
+# Never bake secrets or local config into the image
+.env
+serviceAccountKey.json
+
+# Dev artifacts
+*.test
+*.out
+
+# Migrations and docs are not needed at runtime
+migrations/
+docs/

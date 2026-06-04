@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: campusconnect-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false        # fill in Render dashboard — Neon connection string
+      - key: FIREBASE_CREDENTIALS
+        sync: false        # fill in Render dashboard — paste full service account JSON
