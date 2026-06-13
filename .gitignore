@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 backend/serviceAccountKey.json
+google-services.json          # Firebase Android config — contains API key
 
 # ── Go ────────────────────────────────────────────────────────────────────────
 backend/bin/
