@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: campusconnect-backend
+    name: college-social-app        # live at: https://college-social-app-d7mm.onrender.com
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
@@ -11,6 +11,6 @@ services:
       - key: ENV
         value: production
       - key: DATABASE_URL
-        sync: false        # fill in Render dashboard — Neon connection string
+        sync: false        # set in Render dashboard — Neon connection string
       - key: FIREBASE_CREDENTIALS
-        sync: false        # fill in Render dashboard — paste full service account JSON
+        sync: false        # set in Render dashboard — paste full service account JSON
