@@ -12,8 +12,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import auth from '@react-native-firebase/auth';
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  deleteUser,
+} from '@react-native-firebase/auth';
 import { AuthStackParamList } from '../../navigation/AuthStack';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -121,14 +126,16 @@ export default function SignupScreen({ navigation }: Props) {
     setLoading(true);
 
     try {
-      // 2. Create Firebase account
-      await auth().createUserWithEmailAndPassword(
+      // 2. Create Firebase account (modular v22 API)
+      const firebaseAuth = getAuth();
+      const credential = await createUserWithEmailAndPassword(
+        firebaseAuth,
         form.email.trim(),
         form.password,
       );
 
       // 3. Get ID token
-      const firebaseToken = await auth().currentUser!.getIdToken();
+      const firebaseToken = await credential.user.getIdToken();
 
       // 4. Derive username from email local part (backend requires it)
       const username = form.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_');
@@ -148,8 +155,10 @@ export default function SignupScreen({ navigation }: Props) {
 
     } catch (err: any) {
       // If backend call failed but Firebase user was created, delete the orphan account
-      if (auth().currentUser && err?.code === undefined) {
-        await auth().currentUser!.delete().catch(() => {});
+      const firebaseAuth = getAuth();
+      const currentUser = firebaseAuth.currentUser;
+      if (currentUser && err?.code === undefined) {
+        await deleteUser(currentUser).catch(() => {});
       }
 
       const code = err?.userInfo?.code ?? err?.code ?? '';
@@ -200,7 +209,7 @@ export default function SignupScreen({ navigation }: Props) {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A1A" />
+      <StatusBar barStyle="light-content" backgroundColor="#0D0F1E" />
 
       <ScrollView
         contentContainerStyle={styles.container}
@@ -313,7 +322,7 @@ export default function SignupScreen({ navigation }: Props) {
                 style={styles.eyeBtn}
                 onPress={() => setShowPass((v) => !v)}
               >
-                <Text style={styles.eyeIcon}>{showPass ? '🙈' : '👁'}</Text>
+                <Ionicons name={showPass ? 'eye-off' : 'eye'} size={20} color="#5A5D7A" />
               </TouchableOpacity>
             </View>
             {errors.password && (
@@ -338,7 +347,7 @@ export default function SignupScreen({ navigation }: Props) {
                 style={styles.eyeBtn}
                 onPress={() => setShowConfirm((v) => !v)}
               >
-                <Text style={styles.eyeIcon}>{showConfirm ? '🙈' : '👁'}</Text>
+                <Ionicons name={showConfirm ? 'eye-off' : 'eye'} size={20} color="#5A5D7A" />
               </TouchableOpacity>
             </View>
             {errors.confirmPassword && (
@@ -395,18 +404,18 @@ export default function SignupScreen({ navigation }: Props) {
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
-const INPUT_BG   = '#12122A';
-const BORDER     = '#2A2A4A';
-const ACCENT     = '#7C6FE0';
-const ACCENT_DIM = 'rgba(124, 111, 224, 0.45)';
+const INPUT_BG   = '#1A1D2E';
+const BORDER     = '#252840';
+const ACCENT     = '#5B8BFF';
+const ACCENT_DIM = 'rgba(91,139,255,0.35)';
 const ERROR_RED  = '#FF6B6B';
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#0A0A1A' },
+  flex: { flex: 1, backgroundColor: '#0D0F1E' },
 
   container: {
     flexGrow: 1,
-    backgroundColor: '#0A0A1A',
+    backgroundColor: '#0D0F1E',
     paddingHorizontal: 20,
     paddingTop: 64,
     paddingBottom: 48,
@@ -431,10 +440,10 @@ const styles = StyleSheet.create({
 
   // ── Card ───────────────────────────────────────────────────────────────────
   card: {
-    backgroundColor: '#10101E',
+    backgroundColor: '#141626',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#1E1E38',
+    borderColor: '#1E2138',
     padding: 24,
   },
 
@@ -490,7 +499,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
   },
-  eyeIcon: { fontSize: 18 },
 
   // ── Grad Year picker ───────────────────────────────────────────────────────
   pickerTrigger: {
@@ -514,7 +522,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   pickerOptionSelected: {
-    backgroundColor: 'rgba(124, 111, 224, 0.15)',
+    backgroundColor: 'rgba(91, 139, 255, 0.15)',
   },
   pickerOptionText: {
     color: '#AAAACC',

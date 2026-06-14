@@ -2,13 +2,11 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
-// For local dev on a physical device replace the emulator loopback with your
-// machine's LAN IP: e.g. http://192.168.1.x:8080/api/v1
-const BASE_URL = __DEV__
-  ? 'http://10.0.2.2:8080/api/v1'                          // Android emulator → host loopback
-  : 'https://college-social-app-d7mm.onrender.com/api/v1'; // production ✅
-
+// Using Render for both dev + prod since the Go backend isn't running locally.
+// To test against a local server: swap RENDER_BASE_URL → 'http://10.0.2.2:8080/api/v1'
 export const RENDER_BASE_URL = 'https://college-social-app-d7mm.onrender.com/api/v1';
+
+const BASE_URL = RENDER_BASE_URL;
 
 // ── Axios instance ────────────────────────────────────────────────────────────
 const api = axios.create({
