@@ -90,15 +90,14 @@ func (r *Repository) ExistsByUsername(ctx context.Context, username string) (boo
 // Create inserts a new user and returns the created record.
 func (r *Repository) Create(ctx context.Context, params CreateUserParams) (*User, error) {
 	query := `
-		INSERT INTO users (firebase_uid, email, username, full_name, college, major, grad_year)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (firebase_uid, email, username, full_name)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, firebase_uid, email, username, full_name,
 		          bio, avatar_url, college, major, grad_year,
 		          is_open_to_referral, created_at, updated_at
 	`
 	row := r.db.QueryRowContext(ctx, query,
 		params.FirebaseUID, params.Email, params.Username, params.FullName,
-		params.College, params.Major, params.GradYear,
 	)
 	u, err := scanUser(row)
 	if err != nil {
@@ -225,9 +224,6 @@ type CreateUserParams struct {
 	Email       string
 	Username    string
 	FullName    string
-	College     *string
-	Major       *string
-	GradYear    *int16
 }
 
 // UpdateUserParams uses pointers so PATCH can distinguish "not provided" from zero value.

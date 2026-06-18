@@ -23,12 +23,9 @@ func NewService(firebase *firebasepkg.Client, userRepo *users.Repository) *Servi
 
 // SignupRequest holds the body payload for POST /auth/signup.
 type SignupRequest struct {
-	FirebaseToken string  `json:"firebase_token" binding:"required"`
-	Username      string  `json:"username"       binding:"required,min=3,max=50"`
-	FullName      string  `json:"full_name"      binding:"required"`
-	College       *string `json:"college"`
-	Major         *string `json:"major"`
-	GradYear      *int16  `json:"grad_year"`
+	FirebaseToken string `json:"firebase_token" binding:"required"`
+	Username      string `json:"username"       binding:"required,min=3,max=50"`
+	FullName      string `json:"full_name"      binding:"required"`
 }
 
 // LoginRequest holds the body payload for POST /auth/login.
@@ -71,9 +68,6 @@ func (s *Service) Signup(ctx context.Context, req SignupRequest) (*users.User, e
 		Email:       email,
 		Username:    req.Username,
 		FullName:    req.FullName,
-		College:     req.College,
-		Major:       req.Major,
-		GradYear:    req.GradYear,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating user: %w", err)
