@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Group } from '../../types';
+import { Group, GroupMember } from '../../types';
 import PostCard from '../../components/PostCard';
-import { getGroup, joinGroup, leaveGroup } from '../../services/groupsService';
+import { getGroup, getGroupMembers, joinGroup, leaveGroup } from '../../services/groupsService';
 import { GroupsStackParamList } from './GroupsScreen';
 
 type Props = NativeStackScreenProps<GroupsStackParamList, 'GroupDetailScreen'>;
@@ -35,6 +35,9 @@ export default function GroupDetailScreen({ navigation, route }: Props) {
   const [error, setError]       = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>('Discussion');
 
+  const [members, setMembers] = useState<GroupMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
   // ── Load group ───────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -44,6 +47,18 @@ export default function GroupDetailScreen({ navigation, route }: Props) {
       .catch((e) => setError(e?.message ?? 'Failed to load group'))
       .finally(() => setLoading(false));
   }, [groupId]);
+
+  // ── Load members ─────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (activeTab === 'Members' && members.length === 0) {
+      setLoadingMembers(true);
+      getGroupMembers(groupId)
+        .then(setMembers)
+        .catch(() => {}) // Handle silently
+        .finally(() => setLoadingMembers(false));
+    }
+  }, [activeTab, groupId, members.length]);
 
   // ── Join / Leave — optimistic ────────────────────────────────────────────
 
@@ -122,13 +137,49 @@ export default function GroupDetailScreen({ navigation, route }: Props) {
     </View>
   );
 
-  const renderMembers = () => (
-    <View style={styles.emptyTab}>
-      <Ionicons name="people-outline" size={52} color="#2A2D45" />
-      <Text style={styles.emptyTabTitle}>{group.member_count} Members</Text>
-      <Text style={styles.emptyTabSubtext}>Member list coming soon.</Text>
-    </View>
-  );
+  const renderMembers = () => {
+    if (loadingMembers) {
+      return (
+        <View style={styles.emptyTab}>
+          <ActivityIndicator size="small" color="#5B8BFF" />
+        </View>
+      );
+    }
+    if (members.length === 0) {
+      return (
+        <View style={styles.emptyTab}>
+          <Ionicons name="people-outline" size={52} color="#2A2D45" />
+          <Text style={styles.emptyTabTitle}>No members yet</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.membersList}>
+        {members.map((member) => (
+          <Pressable
+            key={member.user_id}
+            style={styles.memberRow}
+            onPress={() => navigation.navigate('ProfileScreen', { userId: member.user_id })}
+          >
+            <View style={styles.memberAvatar}>
+              <Text style={styles.memberAvatarText}>{getInitials(member.full_name)}</Text>
+            </View>
+            <View style={styles.memberInfo}>
+              <Text style={styles.memberName}>{member.full_name}</Text>
+              <Text style={styles.memberUsername}>@{member.username}</Text>
+            </View>
+            {member.role !== 'member' && (
+              <View style={[styles.roleBadge, member.role === 'admin' ? styles.roleBadgeAdmin : styles.roleBadgeModerator]}>
+                <Text style={[styles.roleText, member.role === 'admin' ? styles.roleTextAdmin : styles.roleTextModerator]}>
+                  {member.role.toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        ))}
+      </View>
+    );
+  };
 
   const renderResources = () => (
     <View style={styles.emptyTab}>
@@ -334,4 +385,19 @@ const styles = StyleSheet.create({
   errorText: { color: '#FF6B6B', fontSize: 14, textAlign: 'center' },
   retryBtn:  { backgroundColor: 'rgba(91,139,255,0.15)', borderWidth: 1, borderColor: ACCENT, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
   retryText: { color: ACCENT, fontWeight: '700', fontSize: 14 },
+
+  // ── Members List ───────────────────────────────────────────────────────────
+  membersList: { padding: 16, gap: 12 },
+  memberRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#141626', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#1E2138' },
+  memberAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(91,139,255,0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  memberAvatarText: { color: ACCENT, fontSize: 16, fontWeight: '700' },
+  memberInfo: { flex: 1 },
+  memberName: { color: '#FFFFFF', fontSize: 15, fontWeight: '600', marginBottom: 2 },
+  memberUsername: { color: '#7A7D9A', fontSize: 13 },
+  roleBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+  roleBadgeAdmin: { backgroundColor: 'rgba(255,107,107,0.15)', borderColor: '#FF6B6B' },
+  roleBadgeModerator: { backgroundColor: 'rgba(79,195,247,0.15)', borderColor: '#4FC3F7' },
+  roleText: { fontSize: 10, fontWeight: '700' },
+  roleTextAdmin: { color: '#FF6B6B' },
+  roleTextModerator: { color: '#4FC3F7' },
 });

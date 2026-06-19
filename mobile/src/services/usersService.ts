@@ -11,6 +11,7 @@ export async function getMe(): Promise<User> {
 export interface UpdateMePayload {
   full_name?: string;
   bio?: string;
+  avatar_url?: string;
   college?: string;
   major?: string;
   grad_year?: number;

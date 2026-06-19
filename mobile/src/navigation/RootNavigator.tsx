@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import AuthStack from './AuthStack';
 import MainTabs from './MainTabs';
+import ProfileSetupStack from './ProfileSetupStack';
 
 // RootNavigator is the single decision point for the entire app flow.
 // It reads `token` from AuthContext — the source of truth for auth state.
@@ -16,7 +17,11 @@ import MainTabs from './MainTabs';
 // of the wrong navigator.
 
 export default function RootNavigator() {
-  const { token, isLoading } = useAuth();
+  const { token, user, isLoading } = useAuth();
+
+  // If we have a token (user logged in) but their profile doesn't have college or major,
+  // we block navigation to MainTabs and force them to complete their profile.
+  const isProfileIncomplete = token && (!user?.college || !user?.major);
 
   if (isLoading) {
     return (
@@ -28,7 +33,11 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer>
-      {token ? <MainTabs /> : <AuthStack />}
+      {token ? (
+        isProfileIncomplete ? <ProfileSetupStack /> : <MainTabs />
+      ) : (
+        <AuthStack />
+      )}
     </NavigationContainer>
   );
 }

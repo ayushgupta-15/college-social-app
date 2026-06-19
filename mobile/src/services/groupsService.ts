@@ -1,5 +1,5 @@
 import api from './api';
-import { Group } from '../types';
+import { Group, GroupMember } from '../types';
 
 // ── List / Search ──────────────────────────────────────────────────────────────
 
@@ -45,5 +45,9 @@ export async function leaveGroup(groupId: string): Promise<void> {
   await api.post(`/groups/${groupId}/leave`);
 }
 
-// NOTE: GET /groups/:id/members is not yet implemented on the backend.
-// GroupDetailScreen shows an "Available soon" empty state for the Members tab.
+// ── Members ───────────────────────────────────────────────────────────────────
+
+export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
+  const { data } = await api.get<GroupMember[] | null>(`/groups/${groupId}/members`);
+  return data ?? [];
+}

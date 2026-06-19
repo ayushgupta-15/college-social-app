@@ -7,8 +7,10 @@ import React, {
   useState,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 import api from '../services/api';
 import { User } from '../types';
+import { registerFcmToken } from '../services/notificationsService';
 
 // ── Shape ─────────────────────────────────────────────────────────────────────
 interface AuthContextValue {
@@ -58,6 +60,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
+
+  const registerPushToken = useCallback(async () => {
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus === 'granted') {
+        const tokenData = await Notifications.getDevicePushTokenAsync();
+        if (tokenData && tokenData.data) {
+          await registerFcmToken(tokenData.data);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to register push token', err);
+    }
+  }, []);
+
+  // Trigger push token registration when user logs in or is restored
+  useEffect(() => {
+    if (user && token) {
+      registerPushToken();
+    }
+  }, [user, token, registerPushToken]);
 
   const login = useCallback(async (newToken: string, newUser: User) => {
     await SecureStore.setItemAsync('token', newToken);

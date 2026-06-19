@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { Post } from '../../types';
@@ -23,6 +23,7 @@ import {
   PostType,
 } from '../../services/postsService';
 import { FeedStackParamList } from '../../navigation/FeedStack';
+import { getUnreadCount } from '../../services/notificationsService';
 
 // ── Tab switcher ──────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ export default function FeedScreen() {
   const [nextCursor, setNextCursor]   = useState<string | null>(null);
   const [hasMore, setHasMore]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const sheetRef = useRef<BottomSheet>(null);
 
@@ -75,6 +77,13 @@ export default function FeedScreen() {
     setLoading(true);
     loadFeed().finally(() => setLoading(false));
   }, [loadFeed]);
+
+  // Refresh unread count on focus
+  useFocusEffect(
+    useCallback(() => {
+      getUnreadCount().then(setUnreadCount).catch(() => {});
+    }, [])
+  );
 
   // Pull-to-refresh
   const handleRefresh = useCallback(async () => {
@@ -175,7 +184,14 @@ export default function FeedScreen() {
       <View style={styles.searchBar}>
         <Ionicons name="search-outline" size={17} color="#44476A" />
         <Text style={styles.searchPlaceholder}>Search Campus Connect</Text>
-        <Ionicons name="notifications-outline" size={22} color="#7A7D9A" />
+        <Pressable onPress={() => navigation.push('NotificationsScreen')} style={styles.bellBtn}>
+          <Ionicons name="notifications-outline" size={22} color="#7A7D9A" />
+          {unreadCount > 0 && (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{unreadCount}</Text>
+            </View>
+          )}
+        </Pressable>
       </View>
 
       {/* For You / Following tabs */}
@@ -305,6 +321,29 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#44476A',
     fontSize: 14,
+  },
+  bellBtn: {
+    position: 'relative',
+    padding: 2,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF4444',
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#141626',
+  },
+  bellBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
   },
 
   // ── Tabs ───────────────────────────────────────────────────────────────────

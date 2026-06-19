@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
   Pressable,
   ScrollView,
   StatusBar,
@@ -34,6 +35,9 @@ type Props = {
 type ProfileTab = 'About' | 'Skills' | 'Projects' | 'Activity';
 const TABS: ProfileTab[] = ['About', 'Skills', 'Projects', 'Activity'];
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const TAB_WIDTH = SCREEN_WIDTH / TABS.length;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen({ navigation, route }: Props) {
@@ -50,7 +54,6 @@ export default function ProfileScreen({ navigation, route }: Props) {
 
   // Animated underline position
   const tabUnderlineX = useRef(new Animated.Value(0)).current;
-  const TAB_WIDTH = 80; // approximate — works fine for 4 tabs
 
   // ── Load profile ────────────────────────────────────────────────────────────
 
@@ -118,45 +121,28 @@ export default function ProfileScreen({ navigation, route }: Props) {
 
   // ── Tab content ─────────────────────────────────────────────────────────────
 
-  const renderAbout = () => (
-    <View style={styles.tabContent}>
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>Details</Text>
+  const renderAbout = () => {
+    const placeholderSkills = ['React Native', 'UI Design', 'Python', 'Cloud', 'Firebase', 'DSA'];
+    return (
+      <View style={styles.tabContent}>
+        {/* Bio text (or placeholder if no bio) */}
+        <Text style={styles.bioText}>
+          {profile?.bio || 'Passionate about software development, UI/UX and building products that solve real-world problems.'}
+        </Text>
 
-        {profile?.college && (
-          <View style={styles.infoRow}>
-            <Ionicons name="business-outline" size={16} color="#5B8BFF" />
-            <Text style={styles.infoText}>{profile.college}</Text>
-          </View>
-        )}
-        {profile?.major && (
-          <View style={styles.infoRow}>
-            <Ionicons name="school-outline" size={16} color="#5B8BFF" />
-            <Text style={styles.infoText}>{profile.major}</Text>
-          </View>
-        )}
-        {profile?.grad_year && (
-          <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={16} color="#5B8BFF" />
-            <Text style={styles.infoText}>Class of {profile.grad_year}</Text>
-          </View>
-        )}
-        {profile?.email && (
-          <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={16} color="#5B8BFF" />
-            <Text style={styles.infoText}>{profile.email}</Text>
-          </View>
-        )}
-      </View>
-
-      {profile?.bio && (
         <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.bioText}>{profile.bio}</Text>
+          <Text style={styles.sectionTitle}>Skills</Text>
+          <View style={styles.skillsWrap}>
+            {placeholderSkills.map((skill) => (
+              <View key={skill} style={styles.skillChip}>
+                <Text style={styles.skillText}>{skill}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-      )}
-    </View>
-  );
+      </View>
+    );
+  };
 
   const renderSkills = () => {
     // Skills are not yet a backend field — show placeholder
@@ -193,7 +179,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
   if (loading) {
     return (
       <View style={styles.center}>
-        <StatusBar barStyle="light-content" backgroundColor="#0D0F1E" />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
         <ActivityIndicator size="large" color="#5B8BFF" />
       </View>
     );
@@ -202,7 +188,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
   if (error || !profile) {
     return (
       <View style={styles.center}>
-        <StatusBar barStyle="light-content" backgroundColor="#0D0F1E" />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
         <Ionicons name="warning-outline" size={44} color="#FF6B6B" />
         <Text style={styles.errorText}>{error ?? 'Profile not found'}</Text>
         <Pressable style={styles.retryBtn} onPress={() => navigation.goBack()}>
@@ -214,7 +200,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0D0F1E" />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
 
       {/* Back button for other profiles */}
       {!isOwnProfile && (
@@ -236,7 +222,19 @@ export default function ProfileScreen({ navigation, route }: Props) {
           onEdit={handleEdit}
           onFollow={handleFollow}
           onAvatarPress={handleAvatarPress}
-          onMessage={() => Alert.alert('Coming Soon', 'Messaging is in Sprint M6.')}
+          onMessage={
+            !isOwnProfile
+              ? () =>
+                  navigation.navigate('Messages', {
+                    screen: 'ChatScreen',
+                    params: {
+                      userId:     profile.id,
+                      userName:   profile.full_name,
+                      userAvatar: profile.avatar_url,
+                    },
+                  })
+              : undefined
+          }
         />
 
         {/* ── Tab switcher ── */}
@@ -278,19 +276,24 @@ const styles = StyleSheet.create({
 
   // ── Top bar (other profiles only) ──────────────────────────────────────────
   topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 52,
     paddingBottom: 8,
-    backgroundColor: BG,
+    backgroundColor: 'transparent',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#141626',
+    backgroundColor: 'rgba(20,22,38,0.6)', // Semi-transparent dark background for visibility on cover image
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -298,6 +301,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 
   // ── Tab bar ────────────────────────────────────────────────────────────────
@@ -325,7 +331,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     left: 0,
-    width: 80,  // 320 / 4 tabs
+    width: TAB_WIDTH,
     height: 2,
     backgroundColor: ACCENT,
     borderRadius: 1,

@@ -1,11 +1,11 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import FeedStack    from './FeedStack';
-import GroupsStack  from './GroupsStack';
-import EventsStack  from './EventsStack';
-import ProfileStack from './ProfileStack';
-import PlaceholderScreen from '../screens/PlaceholderScreen';
+import FeedStack     from './FeedStack';
+import GroupsStack   from './GroupsStack';
+import EventsStack   from './EventsStack';
+import MessagesStack from './MessagesStack';
+import ProfileStack  from './ProfileStack';
 
 export type MainTabParamList = {
   Feed:     undefined;
@@ -54,9 +54,8 @@ export default function MainTabs() {
       {/* GroupsStack: GroupsScreen → GroupDetailScreen */}
       <Tab.Screen name="Groups" component={GroupsStack} />
       <Tab.Screen name="Events" component={EventsStack} />
-      <Tab.Screen name="Messages">
-        {() => <PlaceholderScreen name="Messages" />}
-      </Tab.Screen>
+      {/* MessagesStack: MessagesScreen → ChatScreen */}
+      <Tab.Screen name="Messages" component={MessagesStack} />
 
       {/* ProfileStack: ProfileScreen (own) → EditProfileScreen */}
       <Tab.Screen name="Profile" component={ProfileStack} />

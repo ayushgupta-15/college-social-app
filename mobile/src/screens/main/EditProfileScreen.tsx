@@ -16,8 +16,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { updateMe } from '../../services/usersService';
+import { uploadImage } from '../../services/mediaService';
 import { ProfileStackParamList } from '../../navigation/ProfileStack';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'EditProfileScreen'>;
@@ -35,10 +37,34 @@ export default function EditProfileScreen({ navigation }: Props) {
   const [college,           setCollege]           = useState(user?.college ?? '');
   const [major,             setMajor]             = useState(user?.major ?? '');
   const [gradYear,          setGradYear]          = useState(String(user?.grad_year ?? ''));
+  const [avatarUrl,         setAvatarUrl]         = useState(user?.avatar_url ?? '');
   const [isOpenToReferral,  setIsOpenToReferral]  = useState(user?.is_open_to_referral ?? false);
   const [yearPickerOpen,    setYearPickerOpen]    = useState(false);
   const [saving,            setSaving]            = useState(false);
+  const [uploadingAvatar,   setUploadingAvatar]   = useState(false);
   const [error,             setError]             = useState<string | null>(null);
+
+  const handlePickAvatar = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]?.uri) {
+        setUploadingAvatar(true);
+        setError(null);
+        const url = await uploadImage(result.assets[0].uri);
+        setAvatarUrl(url);
+      }
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to upload avatar.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleSave = useCallback(async () => {
     if (!fullName.trim()) {
@@ -51,6 +77,7 @@ export default function EditProfileScreen({ navigation }: Props) {
       const updated = await updateMe({
         full_name:          fullName.trim()  || undefined,
         bio:                bio.trim()       || undefined,
+        avatar_url:         avatarUrl.trim() || undefined,
         college:            college.trim()   || undefined,
         major:              major.trim()     || undefined,
         grad_year:          gradYear ? parseInt(gradYear, 10) : undefined,
@@ -64,7 +91,7 @@ export default function EditProfileScreen({ navigation }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [fullName, bio, college, major, gradYear, isOpenToReferral, updateUser, navigation]);
+  }, [fullName, bio, avatarUrl, college, major, gradYear, isOpenToReferral, updateUser, navigation]);
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -195,10 +222,32 @@ export default function EditProfileScreen({ navigation }: Props) {
           />
         </View>
 
-        {/* ── Avatar note ── */}
-        <View style={styles.avatarNote}>
-          <Ionicons name="image-outline" size={16} color="#44476A" />
-          <Text style={styles.avatarNoteText}>Avatar upload coming in a future update.</Text>
+        {/* ── Avatar URL ── */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Avatar Image</Text>
+          <View style={styles.avatarInputRow}>
+            <TextInput
+              style={[styles.input, styles.avatarInput]}
+              value={avatarUrl}
+              onChangeText={setAvatarUrl}
+              placeholder="https://example.com/image.jpg"
+              placeholderTextColor="#3A3D55"
+              editable={!saving && !uploadingAvatar}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity 
+              style={[styles.uploadBtn, uploadingAvatar && styles.uploadBtnDisabled]} 
+              onPress={handlePickAvatar}
+              disabled={uploadingAvatar || saving}
+            >
+              {uploadingAvatar ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="image" size={20} color="#FFFFFF" />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
       </ScrollView>
@@ -258,7 +307,28 @@ const styles = StyleSheet.create({
   switchRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#141626', borderRadius: 12, borderWidth: 1, borderColor: '#1E2138', padding: 14, marginBottom: 16 },
   switchLabel:  { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   switchTitle:  { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  switchSubtitle: { color: '#7A7D9A', fontSize: 12, marginTop: 2 },
+  switchSubtitle: { color: '#7A7D9A', fontSize: 13, marginTop: 2 },
+
+  // ── Avatar row ─────────────────────────────────────────────────────────────
+  avatarInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  avatarInput: {
+    flex: 1,
+  },
+  uploadBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: ACCENT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadBtnDisabled: {
+    opacity: 0.7,
+  },
 
   // ── Avatar note ────────────────────────────────────────────────────────────
   avatarNote:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },

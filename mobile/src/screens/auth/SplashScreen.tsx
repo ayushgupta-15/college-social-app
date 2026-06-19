@@ -2,231 +2,311 @@ import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   Dimensions,
+  Easing,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import Svg, { Ellipse } from 'react-native-svg';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Splash'>;
 
 const { width } = Dimensions.get('window');
+const LOGO_CONTAINER = width;
+const RING_CENTER_X = LOGO_CONTAINER / 2;
+const RING_CENTER_Y = LOGO_CONTAINER / 2 - 6;
+const LOGO_SIZE = width * 0.52;
+
+// ── Pre-load assets ───────────────────────────────────────────────────────────
+const LOGO_IMG = require('../../../assets/logo.png');
+
+// min(rx, ry) must clear logo + text; max(rx, ry) must fit within screen half-width
+const ORBITAL_RINGS = [
+  { rx: 172, ry: 142, rotation: 15,  color: '#00F0FF' },
+  { rx: 178, ry: 145, rotation: 75,  color: '#8A2BE2' },
+  { rx: 168, ry: 138, rotation: -35, color: '#FF00FF' },
+  { rx: 176, ry: 135, rotation: 135, color: '#4169E1' },
+  { rx: 170, ry: 143, rotation: -80, color: '#9D00FF' },
+  { rx: 174, ry: 140, rotation: 45,  color: '#00D4FF' },
+  { rx: 177, ry: 141, rotation: -120, color: '#B040FF' },
+];
+
+const MAX_RING_RADIUS = Math.max(
+  ...ORBITAL_RINGS.map((r) => Math.max(r.rx, r.ry)),
+);
+const RING_EDGE_PADDING = 20;
+const RING_DRAW_SCALE = Math.min(
+  1,
+  (width / 2 - RING_EDGE_PADDING) / MAX_RING_RADIUS,
+);
+
+// ── Static star positions ─────────────────────────────────────────────────────
+const STARS = [
+  { top: '12%',  left:  '18%', op: 0.40, color: '#ffffff' },
+  { top: '22%',  right: '14%', op: 0.60, color: '#00f2fe' },
+  { top: '08%',  right: '30%', op: 0.35, color: '#4facfe' },
+  { top: '40%',  left:  '06%', op: 0.45, color: '#ffffff' },
+  { top: '55%',  right: '08%', op: 0.50, color: '#00f2fe' },
+  { bottom:'30%',left:  '10%', op: 0.30, color: '#4facfe' },
+  { bottom:'38%',right: '22%', op: 0.50, color: '#00f2fe' },
+  { bottom:'18%',left:  '30%', op: 0.35, color: '#ffffff' },
+  { bottom:'25%',right: '40%', op: 0.40, color: '#4facfe' },
+  { top: '70%',  left:  '85%', op: 0.55, color: '#ffffff' },
+];
 
 export default function SplashScreen({ navigation }: Props) {
-  // ── Animated values ────────────────────────────────────────────────────────
-  const logoOpacity   = useRef(new Animated.Value(0)).current;
-  const logoScale     = useRef(new Animated.Value(0.75)).current;
-  const textOpacity   = useRef(new Animated.Value(0)).current;
-  const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const ringScale1    = useRef(new Animated.Value(0.6)).current;
-  const ringOpacity1  = useRef(new Animated.Value(0)).current;
-  const ringScale2    = useRef(new Animated.Value(0.6)).current;
-  const ringOpacity2  = useRef(new Animated.Value(0)).current;
+  // ── Animated values ─────────────────────────────────────────────────────────
+  const bgOpacity    = useRef(new Animated.Value(0)).current;
+  const ringsOpacity = useRef(new Animated.Value(0)).current;
+  const ringsScale   = useRef(new Animated.Value(0.82)).current;
+  const logoOpacity  = useRef(new Animated.Value(0)).current;
+  const logoScale    = useRef(new Animated.Value(0.75)).current;
+  const textOpacity  = useRef(new Animated.Value(0)).current;
+  const textSlide    = useRef(new Animated.Value(14)).current;
+  const starsOpacity = useRef(new Animated.Value(0)).current;
+  const footerOpacity= useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Stage 1 — rings pulse in
-    Animated.parallel([
-      Animated.timing(ringOpacity1, {
-        toValue: 0.35,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ringScale1, {
-        toValue: 1,
-        duration: 700,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ringOpacity2, {
-        toValue: 0.2,
-        duration: 900,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ringScale2, {
-        toValue: 1,
-        duration: 900,
-        useNativeDriver: true,
+    // 0 — background fades in
+    Animated.timing(bgOpacity, {
+      toValue: 1, duration: 600,
+      easing: Easing.out(Easing.quad), useNativeDriver: true,
+    }).start();
+
+    // 1 — star particles
+    Animated.sequence([
+      Animated.delay(200),
+      Animated.timing(starsOpacity, {
+        toValue: 1, duration: 1000, useNativeDriver: true,
       }),
     ]).start();
 
-    // Stage 2 — logo fades + scales in
+    // 2 — orbital rings scale + fade in (slow, cinematic)
     Animated.sequence([
-      Animated.delay(200),
+      Animated.delay(300),
       Animated.parallel([
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
+        Animated.timing(ringsOpacity, {
+          toValue: 1, duration: 1400,
+          easing: Easing.out(Easing.cubic), useNativeDriver: true,
         }),
-        Animated.spring(logoScale, {
-          toValue: 1,
-          friction: 5,
-          tension: 60,
-          useNativeDriver: true,
+        Animated.timing(ringsScale, {
+          toValue: 1, duration: 1600,
+          easing: Easing.out(Easing.cubic), useNativeDriver: true,
         }),
       ]),
     ]).start();
 
-    // Stage 3 — text fades in after logo
+    // 3 — C logo fades + scales in after rings
     Animated.sequence([
       Animated.delay(700),
-      Animated.timing(textOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
+      Animated.parallel([
+        Animated.timing(logoOpacity, {
+          toValue: 1, duration: 1000,
+          easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        }),
+        Animated.timing(logoScale, {
+          toValue: 1, duration: 1100,
+          easing: Easing.out(Easing.back(1.05)), useNativeDriver: true,
+        }),
+      ]),
     ]).start();
 
-    // Stage 4 — tagline
+    // 4 — "Campus Connect" text slides up
     Animated.sequence([
-      Animated.delay(1000),
-      Animated.timing(taglineOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
+      Animated.delay(1100),
+      Animated.parallel([
+        Animated.timing(textOpacity, {
+          toValue: 1, duration: 900,
+          easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        }),
+        Animated.timing(textSlide, {
+          toValue: 0, duration: 900,
+          easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    // 5 — footer last
+    Animated.sequence([
+      Animated.delay(1600),
+      Animated.timing(footerOpacity, {
+        toValue: 1, duration: 800, useNativeDriver: true,
       }),
     ]).start();
 
-    // Navigate after 2.4s — use replace so back button never returns here
-    const timer = setTimeout(() => {
-      navigation.replace('Login');
-    }, 2400);
-
+    // Navigate after 3.4 s
+    const timer = setTimeout(() => navigation.replace('Onboarding'), 3400);
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A1A" />
+    <Animated.View style={[styles.container, { opacity: bgOpacity }]}>
+      <StatusBar barStyle="light-content" backgroundColor="#070B19" translucent />
 
-      {/* Outer glow ring */}
-      <Animated.View
-        style={[
-          styles.ring,
-          styles.ringOuter,
-          { opacity: ringOpacity2, transform: [{ scale: ringScale2 }] },
-        ]}
-      />
-
-      {/* Inner glow ring */}
-      <Animated.View
-        style={[
-          styles.ring,
-          styles.ringInner,
-          { opacity: ringOpacity1, transform: [{ scale: ringScale1 }] },
-        ]}
-      />
-
-      {/* Logo circle */}
-      <Animated.View
-        style={[
-          styles.logoWrapper,
-          { opacity: logoOpacity, transform: [{ scale: logoScale }] },
-        ]}
-      >
-        <View style={styles.logoBg}>
-          <Text style={styles.logoLetter}>C</Text>
-        </View>
+      {/* ── Star particles ────────────────────────────────────────────── */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: starsOpacity }]}>
+        {STARS.map((s, i) => (
+          <View
+            key={i}
+            style={[
+              styles.star,
+              {
+                top:    s.top    as any,
+                bottom: s.bottom as any,
+                left:   s.left   as any,
+                right:  s.right  as any,
+                opacity: s.op,
+                backgroundColor: s.color,
+              },
+            ]}
+          />
+        ))}
       </Animated.View>
 
-      {/* App name */}
-      <Animated.Text style={[styles.appName, { opacity: textOpacity }]}>
-        Campus Connect
-      </Animated.Text>
+      {/* ── Main logo stack ───────────────────────────────────────────── */}
+      <View style={styles.logoContainer}>
 
-      {/* Tagline */}
-      <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
-        Connect. Learn. Grow.
-      </Animated.Text>
+        {/* Orbital rings — SVG ellipses */}
+        <Animated.View
+          style={[
+            styles.orbitalRings,
+            { opacity: ringsOpacity, transform: [{ scale: ringsScale }] },
+          ]}
+          pointerEvents="none"
+        >
+          <Svg
+            width={LOGO_CONTAINER}
+            height={LOGO_CONTAINER}
+            viewBox={`0 0 ${LOGO_CONTAINER} ${LOGO_CONTAINER}`}
+          >
+            {ORBITAL_RINGS.map((ring, index) => {
+              const rx = ring.rx * RING_DRAW_SCALE;
+              const ry = ring.ry * RING_DRAW_SCALE;
+              return (
+                <Ellipse
+                  key={`ring-${index}`}
+                  cx={RING_CENTER_X}
+                  cy={RING_CENTER_Y}
+                  rx={rx}
+                  ry={ry}
+                  stroke={ring.color}
+                  strokeWidth={1.5}
+                  fill="none"
+                  opacity={0.8}
+                  transform={`rotate(${ring.rotation} ${RING_CENTER_X} ${RING_CENTER_Y})`}
+                />
+              );
+            })}
+          </Svg>
+        </Animated.View>
 
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Powered by React Native  •  v1.0.0</Text>
+        {/* Campus C logo + brand — above rings */}
+        <View style={styles.contentCluster}>
+          <Animated.Image
+            source={LOGO_IMG}
+            style={[
+              styles.logoIcon,
+              { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+            ]}
+            resizeMode="contain"
+          />
+
+          <Animated.Text
+            style={[
+              styles.brandText,
+              {
+                opacity: textOpacity,
+                transform: [{ translateY: textSlide }],
+              },
+            ]}
+          >
+            Campus Connect
+          </Animated.Text>
+        </View>
       </View>
-    </View>
+
+      {/* ── Footer ────────────────────────────────────────────────────── */}
+      <Animated.View style={[styles.footer, { opacity: footerOpacity }]}>
+        <Text style={styles.footerLine}>Powered by React Native</Text>
+        <Text style={styles.footerLine}>v1.0.2026</Text>
+      </Animated.View>
+
+      {/* Home indicator bar */}
+      <View style={styles.homeBar} />
+    </Animated.View>
   );
 }
-
-const LOGO_SIZE   = 120;
-const RING_INNER  = 200;
-const RING_OUTER  = 280;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1A',
+    backgroundColor: '#070B19',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  // ── Rings ──────────────────────────────────────────────────────────────────
-  ring: {
+  // ── Stars ──────────────────────────────────────────────────────────────
+  star: {
     position: 'absolute',
-    borderRadius: 9999,
-    borderWidth: 1.5,
-  },
-  ringInner: {
-    width: RING_INNER,
-    height: RING_INNER,
-    borderColor: '#7C6FE0',
-  },
-  ringOuter: {
-    width: RING_OUTER,
-    height: RING_OUTER,
-    borderColor: '#4B8BFF',
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
   },
 
-  // ── Logo ───────────────────────────────────────────────────────────────────
-  logoWrapper: {
-    marginBottom: 32,
-  },
-  logoBg: {
-    width: LOGO_SIZE,
-    height: LOGO_SIZE,
-    borderRadius: LOGO_SIZE / 2,
-    backgroundColor: 'rgba(124, 111, 224, 0.15)',
-    borderWidth: 2,
-    borderColor: '#7C6FE0',
+  // ── Logo stack ─────────────────────────────────────────────────────────
+  logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    // glow effect via shadow
-    shadowColor: '#7C6FE0',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 24,
-    elevation: 20,
+    width:  LOGO_CONTAINER,
+    height: LOGO_CONTAINER,
   },
-  logoLetter: {
-    fontSize: 56,
-    fontWeight: '800',
+  orbitalRings: {
+    position: 'absolute',
+    width:  '100%',
+    height: '100%',
+    zIndex: 1,
+  },
+  contentCluster: {
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  logoIcon: {
+    width: LOGO_SIZE,
+    height: LOGO_SIZE * 0.88,
+    marginBottom: 2,
+  },
+  brandText: {
+    fontSize: 20,
+    fontWeight: '600',
     color: '#FFFFFF',
-    letterSpacing: -1,
+    letterSpacing: 0.4,
+    marginTop: -2,
   },
 
-  // ── Text ───────────────────────────────────────────────────────────────────
-  appName: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  tagline: {
-    fontSize: 14,
-    color: '#8888AA',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-
-  // ── Footer ─────────────────────────────────────────────────────────────────
+  // ── Footer ──────────────────────────────────────────────────────────────
   footer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 50,
+    alignItems: 'center',
   },
-  footerText: {
+  footerLine: {
     fontSize: 12,
-    color: '#44445A',
-    letterSpacing: 0.3,
+    color: '#4b5563',
+    fontWeight: '400',
+    lineHeight: 18,
+    letterSpacing: 0.2,
+  },
+
+  // Home indicator
+  homeBar: {
+    position: 'absolute',
+    bottom: 8,
+    width: 134,
+    height: 5,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderRadius: 2.5,
   },
 });

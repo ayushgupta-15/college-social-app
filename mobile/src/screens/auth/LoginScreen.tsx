@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,13 +14,45 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { getAuth, signInWithEmailAndPassword } from '@react-native-firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithCredential,
+  signInWithEmailAndPassword,
+} from '@react-native-firebase/auth';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import Svg, { Path } from 'react-native-svg';
 import { AuthStackParamList } from '../../navigation/AuthStack';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { User } from '../../types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
+
+const GOOGLE_WEB_CLIENT_ID = '756729893068-ogue2g91u2cihcvcuc8gfefqicnh9e6q.apps.googleusercontent.com';
+
+function GoogleIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 18 18">
+      <Path
+        fill="#4285F4"
+        d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.568 2.684-3.876 2.684-6.616Z"
+      />
+      <Path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18Z"
+      />
+      <Path
+        fill="#FBBC05"
+        d="M3.964 10.711A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.711V4.957H.957A9.003 9.003 0 0 0 0 9c0 1.452.348 2.826.957 4.043l3.007-2.332Z"
+      />
+      <Path
+        fill="#EA4335"
+        d="M9 3.58c1.321 0 2.508.454 3.44 1.346l2.582-2.582C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.957L3.964 7.29C4.672 5.162 6.656 3.58 9 3.58Z"
+      />
+    </Svg>
+  );
+}
 
 function mapFirebaseError(code: string): string {
   switch (code) {
@@ -35,6 +67,20 @@ function mapFirebaseError(code: string): string {
   }
 }
 
+function mapGoogleError(err: any): string {
+  const code = err?.code ?? '';
+  switch (code) {
+    case statusCodes.SIGN_IN_CANCELLED:
+      return '';
+    case statusCodes.IN_PROGRESS:
+      return 'Google login is already in progress.';
+    case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+      return 'Google Play Services is not available or needs an update.';
+    default:
+      return err?.message ?? 'Google login failed. Please try again.';
+  }
+}
+
 export default function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
   const [email, setEmail]       = useState('');
@@ -42,6 +88,13 @@ export default function LoginScreen({ navigation }: Props) {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
+
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: GOOGLE_WEB_CLIENT_ID,
+      offlineAccess: false,
+    });
+  }, []);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) { setError('Please fill in all fields.'); return; }
@@ -56,6 +109,60 @@ export default function LoginScreen({ navigation }: Props) {
       const code = err?.userInfo?.code ?? err?.code ?? '';
       setError(code.startsWith('auth/') ? mapFirebaseError(code) : (err?.message ?? 'An unexpected error occurred.'));
     } finally { setLoading(false); }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+      const googleUser = await GoogleSignin.signIn();
+      if (googleUser.type === 'cancelled') {
+        return;
+      }
+
+      let idToken = googleUser.data.idToken;
+      if (!idToken) {
+        const tokens = await GoogleSignin.getTokens();
+        idToken = tokens.idToken;
+      }
+      if (!idToken) {
+        throw new Error('Google did not return an ID token.');
+      }
+
+      const firebaseAuth = getAuth();
+      const googleCredential = GoogleAuthProvider.credential(idToken);
+      const credential = await signInWithCredential(firebaseAuth, googleCredential);
+      const firebaseToken = await credential.user.getIdToken();
+
+      try {
+        const { data: user } = await api.post<User>('/auth/login', { firebase_token: firebaseToken });
+        await login(firebaseToken, user);
+      } catch (apiErr: any) {
+        // New Google user — no account in DB yet. Send them to Signup with token pre-filled.
+        const msg: string = apiErr?.response?.data?.message ?? apiErr?.message ?? '';
+        if (msg.includes('no account found') || apiErr?.response?.status === 404) {
+          const googleEmail: string = credential.user.email ?? '';
+          const googleName: string  = credential.user.displayName ?? '';
+          navigation.navigate('Signup', {
+            prefillFirebaseToken: firebaseToken,
+            prefillEmail: googleEmail,
+            prefillFullName: googleName,
+          });
+        } else {
+          throw apiErr;
+        }
+      }
+    } catch (err: any) {
+      const googleMessage = mapGoogleError(err);
+      if (googleMessage) {
+        console.warn('Google login error:', err);
+        setError(googleMessage);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -135,8 +242,16 @@ export default function LoginScreen({ navigation }: Props) {
           </View>
 
           {/* Google */}
-          <Pressable style={styles.googleBtn} disabled={loading}>
-            <Text style={styles.googleG}>G</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.googleBtn,
+              pressed && !loading && styles.googleBtnPressed,
+              loading && styles.googleBtnDisabled,
+            ]}
+            onPress={handleGoogleLogin}
+            disabled={loading}
+          >
+            <GoogleIcon />
             <Text style={styles.googleText}>Google</Text>
           </Pressable>
 
@@ -192,7 +307,8 @@ const styles = StyleSheet.create({
   dividerText: { marginHorizontal: 12, fontSize: 12, color: '#44476A' },
 
   googleBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: INPUT_BG, borderWidth: 1, borderColor: BORDER, borderRadius: 12, paddingVertical: 14, gap: 10 },
-  googleG:    { fontSize: 16, fontWeight: '700', color: '#4285F4' },
+  googleBtnPressed: { opacity: 0.85 },
+  googleBtnDisabled: { opacity: 0.6 },
   googleText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
 
   signupRow:    { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 20 },

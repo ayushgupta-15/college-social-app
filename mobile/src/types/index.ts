@@ -59,6 +59,17 @@ export interface Group {
   created_at: string;
 }
 
+export type MemberRole = 'admin' | 'moderator' | 'member';
+
+export interface GroupMember {
+  user_id: string;
+  username: string;
+  full_name: string;
+  avatar_url?: string;
+  role: MemberRole;
+  joined_at: string;
+}
+
 export interface Event {
   id: string;
   title: string;

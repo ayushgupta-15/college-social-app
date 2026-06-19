@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -26,16 +26,15 @@ import { User } from '../../types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Signup'>;
 
-// ── Grad year picker options ───────────────────────────────────────────────────
-const GRAD_YEARS = ['2024', '2025', '2026', '2027', '2028'];
+// Is this a Google-initiated signup (prefill token present)?
+function isGoogleMode(params: Props['route']['params']): boolean {
+  return !!(params && params.prefillFirebaseToken);
+}
 
 // ── Form state ────────────────────────────────────────────────────────────────
 interface FormState {
   fullName: string;
   email: string;
-  college: string;
-  branch: string;
-  gradYear: string;
   password: string;
   confirmPassword: string;
 }
@@ -43,28 +42,24 @@ interface FormState {
 interface FormErrors {
   fullName?: string;
   email?: string;
-  college?: string;
-  branch?: string;
-  gradYear?: string;
   password?: string;
   confirmPassword?: string;
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
-function validate(form: FormState): FormErrors {
+function validate(form: FormState, googleMode: boolean): FormErrors {
   const errs: FormErrors = {};
   if (!form.fullName.trim())              errs.fullName = 'Full name is required';
   if (!form.email.trim())                 errs.email    = 'Email is required';
   else if (!/\S+@\S+\.\S+/.test(form.email))
                                           errs.email    = 'Enter a valid email address';
-  if (!form.college.trim())               errs.college  = 'College is required';
-  if (!form.branch.trim())               errs.branch   = 'Branch is required';
-  if (!form.gradYear)                    errs.gradYear = 'Select a graduation year';
-  if (!form.password)                    errs.password = 'Password is required';
-  else if (form.password.length < 8)    errs.password = 'Minimum 8 characters';
-  if (!form.confirmPassword)             errs.confirmPassword = 'Please confirm your password';
-  else if (form.password !== form.confirmPassword)
+  if (!googleMode) {
+    if (!form.password)                  errs.password = 'Password is required';
+    else if (form.password.length < 8)   errs.password = 'Minimum 8 characters';
+    if (!form.confirmPassword)           errs.confirmPassword = 'Please confirm your password';
+    else if (form.password !== form.confirmPassword)
                                          errs.confirmPassword = 'Passwords do not match';
+  }
   return errs;
 }
 
@@ -83,18 +78,30 @@ function mapFirebaseError(code: string): string {
   }
 }
 
-export default function SignupScreen({ navigation }: Props) {
+export default function SignupScreen({ navigation, route }: Props) {
   const { login } = useAuth();
+  const googleMode = isGoogleMode(route.params);
+  const prefillToken    = route.params?.prefillFirebaseToken ?? '';
+  const prefillEmail    = route.params?.prefillEmail ?? '';
+  const prefillFullName = route.params?.prefillFullName ?? '';
 
   const [form, setForm] = useState<FormState>({
-    fullName: '',
-    email: '',
-    college: '',
-    branch: '',
-    gradYear: '',
+    fullName: prefillFullName,
+    email: prefillEmail,
     password: '',
     confirmPassword: '',
   });
+
+  // Sync if params arrive asynchronously (edge case)
+  useEffect(() => {
+    if (prefillFullName || prefillEmail) {
+      setForm((prev) => ({
+        ...prev,
+        fullName: prefillFullName || prev.fullName,
+        email:    prefillEmail    || prev.email,
+      }));
+    }
+  }, [prefillFullName, prefillEmail]);
 
   const [errors, setErrors]           = useState<FormErrors>({});
   const [showPass, setShowPass]       = useState(false);
@@ -111,8 +118,8 @@ export default function SignupScreen({ navigation }: Props) {
   };
 
   const handleSignup = async () => {
-    // 1. Local validation
-    const errs = validate(form);
+    // 1. Local validation (password skipped in Google mode)
+    const errs = validate(form, googleMode);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
@@ -126,46 +133,52 @@ export default function SignupScreen({ navigation }: Props) {
     setLoading(true);
 
     try {
-      // 2. Create Firebase account (modular v22 API)
-      const firebaseAuth = getAuth();
-      const credential = await createUserWithEmailAndPassword(
-        firebaseAuth,
-        form.email.trim(),
-        form.password,
-      );
+      let firebaseToken: string;
 
-      // 3. Get ID token
-      const firebaseToken = await credential.user.getIdToken();
+      if (googleMode) {
+        // ── Google path: Firebase account already exists, use the pre-verified token
+        firebaseToken = prefillToken;
+      } else {
+        // ── Email/Password path: create Firebase account first
+        const firebaseAuth = getAuth();
+        const credential = await createUserWithEmailAndPassword(
+          firebaseAuth,
+          form.email.trim(),
+          form.password,
+        );
+        firebaseToken = await credential.user.getIdToken();
+      }
 
-      // 4. Derive username from email local part (backend requires it)
+      // Derive username from email local part (backend requires it)
       const username = form.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_');
 
-      // 5. POST /auth/signup
+      // POST /auth/signup
       const { data: user } = await api.post<User>('/auth/signup', {
         firebase_token: firebaseToken,
         username,
         full_name:  form.fullName.trim(),
-        college:    form.college.trim(),
-        major:      form.branch.trim(),
-        grad_year:  parseInt(form.gradYear, 10),
       });
 
-      // 6. Persist session → navigate to MainTabs
+      // Persist session → navigate to MainTabs
       await login(firebaseToken, user);
 
     } catch (err: any) {
-      // If backend call failed but Firebase user was created, delete the orphan account
-      const firebaseAuth = getAuth();
-      const currentUser = firebaseAuth.currentUser;
-      if (currentUser && err?.code === undefined) {
-        await deleteUser(currentUser).catch(() => {});
+      // If email/password signup backend call failed, clean up the orphan Firebase account
+      if (!googleMode) {
+        const firebaseAuth = getAuth();
+        const currentUser = firebaseAuth.currentUser;
+        if (currentUser && err?.code === undefined) {
+          await deleteUser(currentUser).catch(() => {});
+        }
       }
 
       const code = err?.userInfo?.code ?? err?.code ?? '';
       if (code.startsWith('auth/')) {
         setApiError(mapFirebaseError(code));
       } else {
-        setApiError(err?.message ?? 'An unexpected error occurred.');
+        setApiError(
+          err?.response?.data?.message ?? err?.message ?? 'An unexpected error occurred.',
+        );
       }
     } finally {
       setLoading(false);
@@ -218,9 +231,13 @@ export default function SignupScreen({ navigation }: Props) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.title}>
+            {googleMode ? '🎉 Almost there!' : 'Create Account'}
+          </Text>
           <Text style={styles.subtitle}>
-            Join thousands of students on Campus Connect
+            {googleMode
+              ? 'Just a few details to set up your Campus Connect profile'
+              : 'Join thousands of students on Campus Connect'}
           </Text>
         </View>
 
@@ -249,111 +266,58 @@ export default function SignupScreen({ navigation }: Props) {
             autoCapitalize="none"
           />
 
-          <Field
-            label="College"
-            fieldKey="college"
-            placeholder="Delhi Technological University"
-          />
-
-          <Field
-            label="Branch"
-            fieldKey="branch"
-            placeholder="Electronics & Communication"
-          />
-
-          {/* Grad Year — inline picker */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Graduation Year</Text>
-            <TouchableOpacity
-              style={[styles.input, styles.pickerTrigger, errors.gradYear && styles.inputError]}
-              onPress={() => setYearOpen((v) => !v)}
-              disabled={loading}
-            >
-              <Text style={form.gradYear ? styles.pickerValue : styles.pickerPlaceholder}>
-                {form.gradYear || 'Select year'}
-              </Text>
-              <Text style={styles.pickerCaret}>{yearOpen ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-            {yearOpen && (
-              <View style={styles.pickerDropdown}>
-                {GRAD_YEARS.map((year) => (
+          {/* Password — hidden in Google mode */}
+          {!googleMode && (
+            <>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput, errors.password && styles.inputError]}
+                    placeholder="Min. 8 characters"
+                    placeholderTextColor="#44445A"
+                    value={form.password}
+                    onChangeText={(v) => updateField('password', v)}
+                    secureTextEntry={!showPass}
+                    editable={!loading}
+                  />
                   <TouchableOpacity
-                    key={year}
-                    style={[
-                      styles.pickerOption,
-                      form.gradYear === year && styles.pickerOptionSelected,
-                    ]}
-                    onPress={() => {
-                      updateField('gradYear', year);
-                      setYearOpen(false);
-                    }}
+                    style={styles.eyeBtn}
+                    onPress={() => setShowPass((v) => !v)}
                   >
-                    <Text
-                      style={[
-                        styles.pickerOptionText,
-                        form.gradYear === year && styles.pickerOptionTextSelected,
-                      ]}
-                    >
-                      {year}
-                    </Text>
+                    <Ionicons name={showPass ? 'eye-off' : 'eye'} size={20} color="#5A5D7A" />
                   </TouchableOpacity>
-                ))}
+                </View>
+                {errors.password && (
+                  <Text style={styles.fieldError}>{errors.password}</Text>
+                )}
               </View>
-            )}
-            {errors.gradYear && (
-              <Text style={styles.fieldError}>{errors.gradYear}</Text>
-            )}
-          </View>
 
-          {/* Password */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordWrapper}>
-              <TextInput
-                style={[styles.input, styles.passwordInput, errors.password && styles.inputError]}
-                placeholder="Min. 8 characters"
-                placeholderTextColor="#44445A"
-                value={form.password}
-                onChangeText={(v) => updateField('password', v)}
-                secureTextEntry={!showPass}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setShowPass((v) => !v)}
-              >
-                <Ionicons name={showPass ? 'eye-off' : 'eye'} size={20} color="#5A5D7A" />
-              </TouchableOpacity>
-            </View>
-            {errors.password && (
-              <Text style={styles.fieldError}>{errors.password}</Text>
-            )}
-          </View>
-
-          {/* Confirm Password */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <View style={styles.passwordWrapper}>
-              <TextInput
-                style={[styles.input, styles.passwordInput, errors.confirmPassword && styles.inputError]}
-                placeholder="••••••••"
-                placeholderTextColor="#44445A"
-                value={form.confirmPassword}
-                onChangeText={(v) => updateField('confirmPassword', v)}
-                secureTextEntry={!showConfirm}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setShowConfirm((v) => !v)}
-              >
-                <Ionicons name={showConfirm ? 'eye-off' : 'eye'} size={20} color="#5A5D7A" />
-              </TouchableOpacity>
-            </View>
-            {errors.confirmPassword && (
-              <Text style={styles.fieldError}>{errors.confirmPassword}</Text>
-            )}
-          </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Confirm Password</Text>
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput, errors.confirmPassword && styles.inputError]}
+                    placeholder="••••••••"
+                    placeholderTextColor="#44445A"
+                    value={form.confirmPassword}
+                    onChangeText={(v) => updateField('confirmPassword', v)}
+                    secureTextEntry={!showConfirm}
+                    editable={!loading}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeBtn}
+                    onPress={() => setShowConfirm((v) => !v)}
+                  >
+                    <Ionicons name={showConfirm ? 'eye-off' : 'eye'} size={20} color="#5A5D7A" />
+                  </TouchableOpacity>
+                </View>
+                {errors.confirmPassword && (
+                  <Text style={styles.fieldError}>{errors.confirmPassword}</Text>
+                )}
+              </View>
+            </>
+          )}
 
           {/* Terms & Conditions */}
           <TouchableOpacity
@@ -385,7 +349,9 @@ export default function SignupScreen({ navigation }: Props) {
                 </Text>
               </View>
             ) : (
-              <Text style={styles.primaryBtnText}>Sign Up</Text>
+              <Text style={styles.primaryBtnText}>
+                {googleMode ? 'Complete Sign Up' : 'Sign Up'}
+              </Text>
             )}
           </Pressable>
 
@@ -500,40 +466,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // ── Grad Year picker ───────────────────────────────────────────────────────
-  pickerTrigger: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pickerPlaceholder: { color: '#44445A', fontSize: 15 },
-  pickerValue:       { color: '#FFFFFF', fontSize: 15 },
-  pickerCaret:       { color: '#8888AA', fontSize: 11 },
-  pickerDropdown: {
-    backgroundColor: '#1A1A30',
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 12,
-    marginTop: 4,
-    overflow: 'hidden',
-  },
-  pickerOption: {
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-  },
-  pickerOptionSelected: {
-    backgroundColor: 'rgba(91, 139, 255, 0.15)',
-  },
-  pickerOptionText: {
-    color: '#AAAACC',
-    fontSize: 15,
-  },
-  pickerOptionTextSelected: {
-    color: ACCENT,
-    fontWeight: '700',
-  },
-
-  // ── Terms ──────────────────────────────────────────────────────────────────
+  // ── Password ───────────────────────────────────────────────────────────────
   termsRow: {
     flexDirection: 'row',
     alignItems: 'center',
