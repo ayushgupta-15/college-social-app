@@ -11,6 +11,7 @@ type Config struct {
 	Port                   string
 	DatabaseURL            string
 	FirebaseCredentialFile string
+	CloudinaryURL          string
 	Env                    string
 }
 
@@ -23,6 +24,7 @@ func Load() *Config {
 		Port:                   getEnv("PORT", "8080"),
 		DatabaseURL:            mustGetEnv("DATABASE_URL"),
 		FirebaseCredentialFile: mustGetEnv("FIREBASE_CREDENTIAL_FILE"),
+		CloudinaryURL:          mustGetEnv("CLOUDINARY_URL"),
 		Env:                    getEnv("ENV", "development"),
 	}
 }

@@ -235,3 +235,42 @@ func (r *Repository) Leave(ctx context.Context, groupID, userID string) error {
 	}
 	return nil
 }
+
+// ── GetMembers ────────────────────────────────────────────────────────────────
+
+// GetMembers returns all members of a group, ordered by role (admin first, then moderators, then members) and then by joined date.
+func (r *Repository) GetMembers(ctx context.Context, groupID string) ([]*Member, error) {
+	query := `
+		SELECT u.id, u.username, u.full_name, u.avatar_url,
+		       gm.role, gm.joined_at
+		FROM group_memberships gm
+		JOIN users u ON u.id = gm.user_id
+		WHERE gm.group_id = $1
+		ORDER BY 
+			CASE gm.role 
+				WHEN 'admin' THEN 1 
+				WHEN 'moderator' THEN 2 
+				ELSE 3 
+			END,
+			gm.joined_at ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("GetMembers query: %w", err)
+	}
+	defer rows.Close()
+
+	var members []*Member
+	for rows.Next() {
+		var m Member
+		var avatar sql.NullString
+		if err := rows.Scan(&m.UserID, &m.Username, &m.FullName, &avatar, &m.Role, &m.JoinedAt); err != nil {
+			return nil, fmt.Errorf("GetMembers scan: %w", err)
+		}
+		if avatar.Valid {
+			m.AvatarURL = &avatar.String
+		}
+		members = append(members, &m)
+	}
+	return members, rows.Err()
+}

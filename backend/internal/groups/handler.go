@@ -23,6 +23,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/groups", h.ListGroups)
 	rg.POST("/groups", h.CreateGroup)
 	rg.GET("/groups/:id", h.GetGroup)
+	rg.GET("/groups/:id/members", h.GetMembers)
 	rg.POST("/groups/:id/join", h.JoinGroup)
 	rg.POST("/groups/:id/leave", h.LeaveGroup)
 }
@@ -213,6 +214,34 @@ func (h *Handler) LeaveGroup(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// ── GET /groups/:id/members ───────────────────────────────────────────────────
+
+// GetMembers godoc
+// @Summary      Get members of a group
+// @Tags         Groups
+// @Produce      json
+// @Param        id path string true "Group UUID"
+// @Success      200 {array} Member
+// @Failure      404 {object} ErrorResponse
+// @Router       /groups/{id}/members [get]
+func (h *Handler) GetMembers(c *gin.Context) {
+	groupID := c.Param("id")
+
+	// Verify group exists
+	if _, err := h.repo.GetByID(c.Request.Context(), groupID); errors.Is(err, ErrNotFound) {
+		c.JSON(http.StatusNotFound, ErrorResponse{Message: "group not found"})
+		return
+	}
+
+	members, err := h.repo.GetMembers(c.Request.Context(), groupID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, members)
 }
 
 // ErrorResponse is the standard error envelope.

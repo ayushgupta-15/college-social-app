@@ -10,6 +10,7 @@ import (
 	"github.com/ayushgupta-15/college-social-app/backend/internal/chat"
 	"github.com/ayushgupta-15/college-social-app/backend/internal/events"
 	"github.com/ayushgupta-15/college-social-app/backend/internal/groups"
+	"github.com/ayushgupta-15/college-social-app/backend/internal/media"
 	"github.com/ayushgupta-15/college-social-app/backend/internal/middleware"
 	"github.com/ayushgupta-15/college-social-app/backend/internal/notifications"
 	"github.com/ayushgupta-15/college-social-app/backend/internal/posts"
@@ -17,6 +18,7 @@ import (
 	"github.com/ayushgupta-15/college-social-app/backend/pkg/config"
 	"github.com/ayushgupta-15/college-social-app/backend/pkg/database"
 	firebasepkg "github.com/ayushgupta-15/college-social-app/backend/pkg/firebase"
+	mediapkg "github.com/ayushgupta-15/college-social-app/backend/pkg/media"
 )
 
 func main() {
@@ -58,6 +60,13 @@ func main() {
 	groupHandler := groups.NewHandler(groupRepo, userRepo)
 	eventHandler := events.NewHandler(eventRepo, userRepo)
 	chatHandler  := chat.NewHandler(hub, chatRepo, userRepo)
+	
+	// Media
+	mediaSvc, err := mediapkg.NewService(cfg.CloudinaryURL)
+	if err != nil {
+		log.Fatalf("Failed to init media service: %v", err)
+	}
+	mediaHandler := media.NewHandler(mediaSvc)
 
 	// getUserID is a closure that resolves a Firebase UID to the internal UUID.
 	// Passed to notifications.Handler to avoid circular imports.
@@ -98,6 +107,7 @@ func main() {
 		eventHandler.RegisterRoutes(protected)
 		chatHandler.RegisterRoutes(protected)
 		notifHandler.RegisterRoutes(protected)
+		mediaHandler.RegisterRoutes(protected)
 	}
 
 	// Start server
