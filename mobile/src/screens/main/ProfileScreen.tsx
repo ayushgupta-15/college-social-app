@@ -41,7 +41,7 @@ const TAB_WIDTH = SCREEN_WIDTH / TABS.length;
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen({ navigation, route }: Props) {
-  const { user: me, updateUser } = useAuth();
+  const { user: me, updateUser, logout } = useAuth();
   const paramUserId = route.params?.userId;
   const isOwnProfile = !paramUserId || paramUserId === me?.id;
   const targetUserId = isOwnProfile ? me?.id : paramUserId;
@@ -118,6 +118,29 @@ export default function ProfileScreen({ navigation, route }: Props) {
   const handleEdit = useCallback(() => {
     navigation.navigate('EditProfileScreen' as any);
   }, [navigation]);
+
+  // ── Logout ──────────────────────────────────────────────────────────────────
+
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logout();
+            } catch (e) {
+              Alert.alert('Error', 'Failed to log out. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  }, [logout]);
 
   // ── Tab content ─────────────────────────────────────────────────────────────
 
@@ -260,6 +283,16 @@ export default function ProfileScreen({ navigation, route }: Props) {
         {activeTab === 'Skills'   && renderSkills()}
         {activeTab === 'Projects' && renderEmptyTab('Projects')}
         {activeTab === 'Activity' && renderEmptyTab('Activity')}
+
+        {/* ── Logout (own profile only) ── */}
+        {isOwnProfile && (
+          <View style={styles.logoutSection}>
+            <Pressable style={styles.logoutBtn} onPress={handleLogout}>
+              <Ionicons name="log-out-outline" size={20} color="#FF6B6B" />
+              <Text style={styles.logoutText}>Log Out</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -416,6 +449,29 @@ const styles = StyleSheet.create({
   emptyTabText: {
     color: '#44476A',
     fontSize: 14,
+  },
+
+  // ── Logout ─────────────────────────────────────────────────────────────────
+  logoutSection: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 48,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.35)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255,107,107,0.07)',
+  },
+  logoutText: {
+    color: '#FF6B6B',
+    fontSize: 15,
+    fontWeight: '700',
   },
 
   // ── Error ──────────────────────────────────────────────────────────────────

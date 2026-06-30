@@ -221,6 +221,7 @@ export default function GroupsScreen({ navigation }: { navigation: any }) {
         data={SUBJECTS}
         keyExtractor={(s) => s}
         horizontal
+        style={{ flexGrow: 0 }}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chipList}
         renderItem={({ item }) => (
@@ -386,8 +387,9 @@ const styles = StyleSheet.create({
   chipList: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
+    height: 32,
+    justifyContent: 'center',
+    borderRadius: 16,
     backgroundColor: '#141626',
     borderWidth: 1,
     borderColor: '#1E2138',
@@ -424,7 +426,7 @@ const styles = StyleSheet.create({
   sheetContainer: { flex: 1, paddingHorizontal: 16, paddingBottom: 24 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, marginBottom: 8 },
   sheetTitle:  { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  createBtn:   { backgroundColor: ACCENT, paddingHorizontal: 18, paddingVertical: 7, borderRadius: 20 },
+  createBtn:   { backgroundColor: ACCENT, paddingHorizontal: 18, height: 32, justifyContent: 'center', borderRadius: 16 },
   createBtnDisabled: { backgroundColor: 'rgba(91,139,255,0.3)' },
   createBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 
